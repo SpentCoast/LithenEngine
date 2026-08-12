@@ -1,0 +1,46 @@
+# Prerequisites
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
+*.obj
+*.pyc
+
+# IDEs and Editors
+.vscode/
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln
+*.vcxproj
+*.vcxproj.user
+cmake-build-*/
+
+# CMake
+build/
+out/
+bin/
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+
+# Dependencies (FetchContent)
+_deps/
+
+# Compiled Shaders
+*.spv
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
