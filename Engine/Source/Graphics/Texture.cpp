@@ -1,5 +1,7 @@
 #include "Graphics/Texture.hpp"
 
+#include <ktx.h>
+
 namespace Lithen {
 
 	Texture::Texture(
@@ -75,17 +77,39 @@ namespace Lithen {
 
 	Texture Texture::LoadFromFile(const VKContext& context, const std::string& filepath)
 	{
-		int textureWidth, textureHeight, textureChannels;
-		stbi_uc* pixels = stbi_load(filepath.c_str(), &textureWidth, &textureHeight, &textureChannels, STBI_rgb_alpha);
-
-		if (!pixels)
+		ktxTexture* kTexture;
+		KTX_error_code result = ktxTexture_CreateFromNamedFile(
+			filepath.c_str(),
+			KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT,
+			&kTexture);
+		if (result != KTX_SUCCESS)
 		{
-			throw std::runtime_error("Failed to load texture image!");
+			throw std::runtime_error("Failed to load KTX texture image!");
 		}
 
-		uint32_t mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(textureWidth, textureHeight)))) + 1;
+		vk::Format textureFormat = vk::Format::eR8G8B8A8Unorm;
+		if (kTexture->classId == ktxTexture2_c)
+		{
+			auto* ktx2 = reinterpret_cast<ktxTexture2*>(kTexture);
+			if (ktxTexture2_NeedsTranscoding(ktx2))
+			{
+				ktxTexture2_TranscodeBasis(ktx2, KTX_TTF_BC7_RGBA, 0);
+			}
 
-		vk::DeviceSize imageSize = static_cast<vk::DeviceSize>(textureWidth * textureHeight * 4);
+			textureFormat = static_cast<vk::Format>(ktx2->vkFormat);
+		}
+
+		if (textureFormat == vk::Format::eUndefined)
+		{
+			textureFormat = vk::Format::eR8G8B8A8Unorm;
+		}
+
+		uint32_t texWidth = kTexture->baseWidth;
+		uint32_t texHeight = kTexture->baseHeight;
+		uint32_t mipLevels = kTexture->numLevels;
+		ktx_size_t imageSize = ktxTexture_GetDataSize(kTexture);
+		ktx_uint8_t* ktxTextureData = ktxTexture_GetData(kTexture);
+
 		Buffer stagingBuffer{
 			context,
 			imageSize,
@@ -95,19 +119,17 @@ namespace Lithen {
 		};
 
 		void* data = stagingBuffer.Map();
-		memcpy(data, pixels, imageSize);
+		memcpy(data, ktxTextureData, imageSize);
 		stagingBuffer.Unmap();
-		stbi_image_free(pixels);
 
 		Texture texture{
 			context,
-			static_cast<uint32_t>(textureWidth),
-			static_cast<uint32_t>(textureHeight),
+			texWidth,
+			texHeight,
 			mipLevels,
 			vk::SampleCountFlagBits::e1,
-			vk::Format::eR8G8B8A8Srgb,
+			textureFormat,
 			vk::ImageTiling::eOptimal,
-			vk::ImageUsageFlagBits::eTransferSrc |
 			vk::ImageUsageFlagBits::eTransferDst |
 			vk::ImageUsageFlagBits::eSampled,
 			vk::MemoryPropertyFlagBits::eDeviceLocal,
@@ -115,10 +137,35 @@ namespace Lithen {
 			true
 		};
 
-		transitionImageLayout(context, *texture.GetImage(), vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, mipLevels);
-		copyBufferToImage(context, *stagingBuffer.GetHandle(), *texture.GetImage(), static_cast<uint32_t>(textureWidth), static_cast<uint32_t>(textureHeight));
-		generateMipmaps(context, *texture.GetImage(), vk::Format::eR8G8B8A8Srgb, textureWidth, textureHeight, mipLevels);
+		std::vector<vk::BufferImageCopy> bufferCopyRegions;
+		for (uint32_t i = 0; i < mipLevels; i++) {
+			ktx_size_t offset;
+			KTX_error_code result = ktxTexture_GetImageOffset(kTexture, i, 0, 0, &offset);
 
+			uint32_t mipWidth = std::max(1U, texWidth >> i);
+			uint32_t mipHeight = std::max(1U, texHeight >> i);
+
+			vk::BufferImageCopy region{
+				offset,
+				0,
+				0,
+				vk::ImageSubresourceLayers{ vk::ImageAspectFlagBits::eColor, i, 0, 1 },
+				vk::Offset3D{ 0, 0, 0 },
+				vk::Extent3D{ mipWidth, mipHeight, 1 }
+			};
+			bufferCopyRegions.push_back(region);
+		}
+
+		transitionImageLayout(context, *texture.GetImage(), vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, mipLevels);
+
+		context.ExecuteImmediateCommand([&](vk::raii::CommandBuffer& commandBuffer)
+			{
+				commandBuffer.copyBufferToImage(*stagingBuffer.GetHandle(), *texture.GetImage(), vk::ImageLayout::eTransferDstOptimal, bufferCopyRegions);
+			});
+
+		transitionImageLayout(context, *texture.GetImage(), vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal, mipLevels);
+
+		ktxTexture_Destroy(kTexture);
 		return texture;
 	}
 

@@ -8,3 +8,6 @@
 #include "Graphics/Swapchain.hpp"
 #include "Graphics/Buffer.hpp"
 #include "Graphics/Texture.hpp"
+#include "Graphics/GraphicsPipeline.hpp"
+#include "Graphics/DescriptorManager.hpp"
+#include "Graphics/Model.hpp"

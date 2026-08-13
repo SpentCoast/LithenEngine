@@ -5,16 +5,14 @@ namespace Lithen {
 	Renderer::Renderer(Window& window, const VKContext& vkContext)
 		: m_Window{ window }, m_Context{ vkContext }, m_Swapchain{ window, vkContext }
 	{
-		m_Texture = Texture::LoadFromFile(m_Context, "Textures/viking_room.png");
+		m_Texture = Texture::LoadFromFile(m_Context, "Textures/viking_room.ktx2");
 		createDepthResources();
-
 		m_DescriptorManager = std::make_unique<DescriptorManager>(m_Context, m_Texture, MAX_FRAMES_IN_FLIGHT);
 
 		createGraphicsPipeline();
-
 		createCommandPool();
 
-		m_Model = std::make_unique<Model>(m_Context, "Models/viking_room.obj");
+		m_Model = std::make_unique<Model>(m_Context, "Models/viking_room.glb");
 
 		createCommandBuffers();
 		createSyncObjects();

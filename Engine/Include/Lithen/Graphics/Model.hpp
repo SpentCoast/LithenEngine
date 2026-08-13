@@ -4,8 +4,6 @@
 #include "Graphics/VulkanContext.hpp"
 #include "Graphics/Buffer.hpp"
 
-#include <tiny_obj_loader.h>
-
 namespace Lithen {
 
 	struct Vertex

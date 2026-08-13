@@ -15,11 +15,20 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(glfw)
 
 FetchContent_Declare(
-	tinyobjloader
-	GIT_REPOSITORY https://github.com/tinyobjloader/tinyobjloader.git
-	GIT_TAG v1.0.6
+	tinygltf
+	GIT_REPOSITORY https://github.com/syoyo/tinygltf.git
+	GIT_TAG v2.9.7
 )
-FetchContent_MakeAvailable(tinyobjloader)
+FetchContent_MakeAvailable(tinygltf)
+
+FetchContent_Declare(
+	ktx
+	GIT_REPOSITORY https://github.com/KhronosGroup/KTX-Software.git
+	GIT_TAG v4.4.2
+)
+set(KTX_FEATURE_TESTS OFF CACHE BOOL "" FORCE)
+set(KTX_FEATURE_TOOLS OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(ktx)
 
 find_package(slang CONFIG HINTS "$ENV{VULKAN_SDK}/lib/cmake")
 find_package(Vulkan REQUIRED)
@@ -43,8 +52,9 @@ add_executable(Engine
  "Source/Graphics/Texture.cpp"
  "Source/Graphics/GraphicsPipeline.cpp"
  "Source/Graphics/DescriptorManager.cpp"
+ "Source/Graphics/Model.cpp"
 
- "Source/External/stb_image.cpp" "Source/Graphics/Model.cpp")
+ "Source/External/stb_image.cpp")
 
 target_include_directories(Engine PRIVATE
 	"${CMAKE_CURRENT_SOURCE_DIR}/Include"
@@ -57,7 +67,8 @@ target_compile_definitions(Engine PRIVATE VULKAN_HPP_HANDLE_ERROR_OUT_OF_DATE_AS
 target_link_libraries(Engine PRIVATE
 	Vulkan::Vulkan
 	glfw
-	tinyobjloader
+	tinygltf
+	ktx
 )
 
 target_precompile_headers(Engine PRIVATE "Include/Lithen/LithenPCH.hpp")
@@ -81,11 +92,13 @@ function(add_slang_shader_target TARGET)
 	add_custom_target(${TARGET} DEPENDS ${SHADERS_DIR}/slang.spv)
 endfunction()
 
-add_custom_command(TARGET Engine POST_BUILD
+add_custom_target(CopyResources ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory
     "${CMAKE_CURRENT_SOURCE_DIR}/Resources"
     "$<TARGET_FILE_DIR:Engine>"
+    COMMENT "Syncing Resources to build directory..."
 )
 
 add_slang_shader_target(Shader SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/Resources/Shaders/Shader.slang")
-add_dependencies(Engine Shader)
+add_dependencies(Engine	Shader)
+add_dependencies(Engine	CopyResources)

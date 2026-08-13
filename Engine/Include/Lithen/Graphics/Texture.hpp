@@ -4,8 +4,6 @@
 #include "Graphics/VulkanContext.hpp"
 #include "Graphics/Buffer.hpp"
 
-#include <stb_image.h>
-
 namespace Lithen {
 
 	class Texture
