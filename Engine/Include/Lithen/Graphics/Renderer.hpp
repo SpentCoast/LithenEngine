@@ -1,6 +1,7 @@
 #pragma once
 #include "LithenPCH.hpp"
 
+#include "Core/GameObject.hpp"
 #include "Graphics/VulkanContext.hpp"
 #include "Graphics/Swapchain.hpp"
 #include "Graphics/Buffer.hpp"
@@ -52,19 +53,16 @@ namespace Lithen {
 	private:
 		Window& m_Window;
 		const VKContext& m_Context;
-
 		Swapchain m_Swapchain;
 
-		std::unique_ptr<DescriptorManager> m_DescriptorManager;
+		std::vector<GameObject> m_GameObjects;
 
 		std::unique_ptr<GraphicsPipeline> m_GraphicsPipeline;
+		std::unique_ptr<DescriptorManager> m_DescriptorManager;
 
 		vk::raii::CommandPool m_CommandPool = nullptr;
 		std::vector<vk::raii::CommandBuffer> m_CommandBuffers;
 
-		std::unique_ptr<Model> m_Model;
-
-		Texture m_Texture;
 		Texture m_ColorTexture;
 		Texture m_DepthTexture;
 

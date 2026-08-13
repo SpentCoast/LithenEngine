@@ -5,15 +5,39 @@ namespace Lithen {
 	Renderer::Renderer(Window& window, const VKContext& vkContext)
 		: m_Window{ window }, m_Context{ vkContext }, m_Swapchain{ window, vkContext }
 	{
-		m_Texture = Texture::LoadFromFile(m_Context, "Textures/viking_room.ktx2");
+		auto sharedModel = std::make_shared<Model>(m_Context, "Models/viking_room.glb");
+		auto sharedTexture = std::make_shared<Texture>(Texture::LoadFromFile(m_Context, "Textures/viking_room.ktx2"));
+
+		GameObject obj1{ sharedModel, sharedTexture };
+		obj1.GetTransform().Translation = { 0.0f, 0.0f, 0.0f };
+		obj1.GetTransform().Rotation = { 0.0f, 0.0f, glm::radians(-90.0f) };
+		m_GameObjects.push_back(std::move(obj1));
+
+		GameObject obj2{ sharedModel, sharedTexture };
+		obj2.GetTransform().Translation = { -2.0f, 0.0f, -1.0f };
+		obj2.GetTransform().Rotation = { 0.0f, 0.0f, glm::radians(-45.0f) };
+		obj2.GetTransform().Scale = { 0.75f, 0.75f, 0.75f };
+		m_GameObjects.push_back(std::move(obj2));
+
+		GameObject obj3{ sharedModel, sharedTexture };
+		obj3.GetTransform().Translation = { 2.0f, 0.0f, -1.0f };
+		obj3.GetTransform().Rotation = { 0.0f, 0.0f, glm::radians(45.0f) };
+		obj3.GetTransform().Scale = { 0.75f, 0.75f, 0.75f };
+		m_GameObjects.push_back(std::move(obj3));
+
 		createDepthResources();
-		m_DescriptorManager = std::make_unique<DescriptorManager>(m_Context, m_Texture, MAX_FRAMES_IN_FLIGHT);
+
+		m_DescriptorManager = std::make_unique<DescriptorManager>(m_Context, MAX_FRAMES_IN_FLIGHT, m_GameObjects.size());
+
+		std::vector<std::shared_ptr<Texture>> textures;
+		for (const auto& obj : m_GameObjects)
+		{
+			textures.push_back(obj.GetTexture());
+		}
+		m_DescriptorManager->CreateObjectDescriptorSets(m_GameObjects, textures);
 
 		createGraphicsPipeline();
 		createCommandPool();
-
-		m_Model = std::make_unique<Model>(m_Context, "Models/viking_room.glb");
-
 		createCommandBuffers();
 		createSyncObjects();
 	}
@@ -43,10 +67,20 @@ namespace Lithen {
 			throw std::runtime_error("Failed to aquire swap chain image!");
 		}
 
-		m_DescriptorManager->UpdateUBO(m_FrameIndex, m_Swapchain.GetExtent());
+		static auto lastTime = std::chrono::high_resolution_clock::now();
+		auto currentTime = std::chrono::high_resolution_clock::now();
+		float deltaTime = std::chrono::duration<float>(currentTime - lastTime).count();
+		lastTime = currentTime;
+
+		for (size_t i = 0; i < m_GameObjects.size(); ++i)
+		{
+			m_GameObjects[i].GetTransform().Rotation.z += 0.5f * deltaTime;
+
+			glm::mat4 modelMatrix = m_GameObjects[i].GetTransform().Mat4();
+			m_DescriptorManager->UpdateUBO(m_FrameIndex, i, modelMatrix, m_Swapchain.GetExtent());
+		}
 
 		m_Context.GetDevice().resetFences(*m_InFlightFences[m_FrameIndex]);
-
 		m_CommandBuffers[m_FrameIndex].reset();
 		recordCommandBuffer(imageIndex);
 
@@ -101,7 +135,7 @@ namespace Lithen {
 			m_Context,
 			"Shaders/slang.spv",
 			m_Context.GetMsaaSamples(),
-			*m_DescriptorManager->GetLayout(),
+			m_DescriptorManager->GetLayout(),
 			m_Swapchain.GetFormat(),
 			Texture::FindDepthFormat(m_Context),
 			vertexInputInfo);
@@ -281,10 +315,24 @@ namespace Lithen {
 				1.0f
 			});
 		commandBuffer.setScissor(0, vk::Rect2D{ vk::Offset2D{0, 0}, m_Swapchain.GetExtent() });
-		m_Model->Bind(commandBuffer);
-		commandBuffer.bindDescriptorSets(
-			vk::PipelineBindPoint::eGraphics, *m_GraphicsPipeline->GetLayout(), 0, *m_DescriptorManager->GetSet(m_FrameIndex), nullptr);
-		m_Model->Draw(commandBuffer);
+
+		for (size_t i = 0; i < m_GameObjects.size(); ++i)
+		{
+			auto& obj = m_GameObjects[i];
+
+			obj.GetModel()->Bind(commandBuffer);
+
+			commandBuffer.bindDescriptorSets(
+				vk::PipelineBindPoint::eGraphics,
+				*m_GraphicsPipeline->GetLayout(),
+				0,
+				m_DescriptorManager->GetSet(i, m_FrameIndex),
+				nullptr
+			);
+
+			obj.GetModel()->Draw(commandBuffer);
+		}
+
 		commandBuffer.endRendering();
 
 		transitionImageLayout(
