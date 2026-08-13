@@ -25,6 +25,7 @@ namespace Lithen {
 		VKContext(const Window& window);
 		~VKContext();
 
+		const vk::raii::Instance& GetInstance() const { return m_Instance; }
 		const vk::raii::PhysicalDevice& GetPhysicalDevice() const { return m_PhysicalDevice; }
 		const vk::raii::Device& GetDevice() const { return m_Device; }
 		const vk::raii::SurfaceKHR& GetSurfaceKHR() const { return m_Surface; }

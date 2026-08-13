@@ -5,25 +5,22 @@ namespace Lithen {
 	Renderer::Renderer(Window& window, const VKContext& vkContext)
 		: m_Window{ window }, m_Context{ vkContext }, m_Swapchain{ window, vkContext }
 	{
-		auto sharedModel = std::make_shared<Model>(m_Context, "Models/viking_room.glb");
-		auto sharedTexture = std::make_shared<Texture>(Texture::LoadFromFile(m_Context, "Textures/viking_room.ktx2"));
+		auto roomModel = std::make_shared<Model>(m_Context, "Models/viking_room.glb");
+		auto roomTexture = std::make_shared<Texture>(Texture::LoadFromFile(m_Context, "Textures/viking_room.ktx2"));
 
-		GameObject obj1{ sharedModel, sharedTexture };
+		auto cubeModel = std::make_shared<Model>(m_Context, "Models/cube.glb");
+		auto cubeTexture = std::make_shared<Texture>(Texture::LoadFromFile(m_Context, "Textures/cube.ktx2"));
+
+		GameObject obj1{ roomModel, roomTexture };
 		obj1.GetTransform().Translation = { 0.0f, 0.0f, 0.0f };
-		obj1.GetTransform().Rotation = { 0.0f, 0.0f, glm::radians(-90.0f) };
+		obj1.GetTransform().Rotation = { 0.0f, 0.0f, 0.0f };
 		m_GameObjects.push_back(std::move(obj1));
 
-		GameObject obj2{ sharedModel, sharedTexture };
-		obj2.GetTransform().Translation = { -2.0f, 0.0f, -1.0f };
-		obj2.GetTransform().Rotation = { 0.0f, 0.0f, glm::radians(-45.0f) };
-		obj2.GetTransform().Scale = { 0.75f, 0.75f, 0.75f };
+		GameObject obj2{ cubeModel, cubeTexture };
+		obj2.GetTransform().Translation = { 2.0f, 0.0f, 0.0f };
+		obj2.GetTransform().Rotation = { 0.0f, 0.0f, 0.0f };
+		obj2.GetTransform().Scale = { 0.5f, 0.5f, 0.5f };
 		m_GameObjects.push_back(std::move(obj2));
-
-		GameObject obj3{ sharedModel, sharedTexture };
-		obj3.GetTransform().Translation = { 2.0f, 0.0f, -1.0f };
-		obj3.GetTransform().Rotation = { 0.0f, 0.0f, glm::radians(45.0f) };
-		obj3.GetTransform().Scale = { 0.75f, 0.75f, 0.75f };
-		m_GameObjects.push_back(std::move(obj3));
 
 		createDepthResources();
 
@@ -40,13 +37,19 @@ namespace Lithen {
 		createCommandPool();
 		createCommandBuffers();
 		createSyncObjects();
+		initImGui();
 	}
 
 	Renderer::~Renderer()
 	{
+		m_Context.GetDevice().waitIdle();
+
+		ImGui_ImplVulkan_Shutdown();
+		ImGui_ImplGlfw_Shutdown();
+		ImGui::DestroyContext();
 	}
 
-	void Renderer::DrawFrame()
+	void Renderer::DrawFrame(const Camera& camera)
 	{
 		auto fenceResult = m_Context.GetDevice().waitForFences(*m_InFlightFences[m_FrameIndex], vk::True, UINT64_MAX);
 		if (fenceResult != vk::Result::eSuccess)
@@ -74,10 +77,10 @@ namespace Lithen {
 
 		for (size_t i = 0; i < m_GameObjects.size(); ++i)
 		{
-			m_GameObjects[i].GetTransform().Rotation.z += 0.5f * deltaTime;
+			//m_GameObjects[i].GetTransform().Rotation.z += 0.5f * deltaTime;
 
 			glm::mat4 modelMatrix = m_GameObjects[i].GetTransform().Mat4();
-			m_DescriptorManager->UpdateUBO(m_FrameIndex, i, modelMatrix, m_Swapchain.GetExtent());
+			m_DescriptorManager->UpdateUBO(m_FrameIndex, i, modelMatrix, camera);
 		}
 
 		m_Context.GetDevice().resetFences(*m_InFlightFences[m_FrameIndex]);
@@ -198,6 +201,45 @@ namespace Lithen {
 		}
 	}
 
+	void Renderer::initImGui()
+	{
+		createImGuiPool();
+
+		IMGUI_CHECKVERSION();
+		ImGui::CreateContext();
+		ImGuiIO& io = ImGui::GetIO(); (void)io;
+		ImGui::StyleColorsDark();
+
+		ImGui_ImplGlfw_InitForVulkan(m_Window.GetWindowHandle(), true);
+
+		ImGui_ImplVulkan_InitInfo initInfo{};
+		initInfo.Instance = *m_Context.GetInstance();
+		initInfo.PhysicalDevice = *m_Context.GetPhysicalDevice();
+		initInfo.Device = *m_Context.GetDevice();
+		initInfo.QueueFamily = m_Context.GetQueueIndex();
+		initInfo.Queue = *m_Context.GetQueue();
+		initInfo.PipelineCache = VK_NULL_HANDLE;
+		initInfo.DescriptorPool = *m_ImGuiDescriptorPool;
+		initInfo.MinImageCount = MAX_FRAMES_IN_FLIGHT;
+		initInfo.ImageCount = MAX_FRAMES_IN_FLIGHT;
+
+		initInfo.UseDynamicRendering = true;
+
+		initInfo.PipelineInfoMain.Subpass = 0;
+		initInfo.PipelineInfoMain.MSAASamples = static_cast<VkSampleCountFlagBits>(m_Context.GetMsaaSamples());
+
+		static VkFormat colorFormat;
+		colorFormat = static_cast<VkFormat>(m_Swapchain.GetFormat());
+
+		initInfo.PipelineInfoMain.PipelineRenderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+		initInfo.PipelineInfoMain.PipelineRenderingCreateInfo.pNext = nullptr;
+		initInfo.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
+		initInfo.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = &colorFormat;
+		initInfo.PipelineInfoMain.PipelineRenderingCreateInfo.depthAttachmentFormat = static_cast<VkFormat>(Texture::FindDepthFormat(m_Context));
+
+		ImGui_ImplVulkan_Init(&initInfo);
+	}
+
 	void Renderer::recreateSwapchain()
 	{
 		m_Swapchain.Recreate();
@@ -231,6 +273,30 @@ namespace Lithen {
 		image.bindMemory(imageMemory, 0);
 
 		return { std::move(image), std::move(imageMemory) };
+	}
+
+	void Renderer::createImGuiPool()
+	{
+		std::array<vk::DescriptorPoolSize, 11> poolSizes = {
+			vk::DescriptorPoolSize{ vk::DescriptorType::eSampler, 1000 },
+			vk::DescriptorPoolSize{ vk::DescriptorType::eCombinedImageSampler, 1000 },
+			vk::DescriptorPoolSize{ vk::DescriptorType::eSampledImage, 1000 },
+			vk::DescriptorPoolSize{ vk::DescriptorType::eStorageImage, 1000 },
+			vk::DescriptorPoolSize{ vk::DescriptorType::eUniformTexelBuffer, 1000 },
+			vk::DescriptorPoolSize{ vk::DescriptorType::eStorageTexelBuffer, 1000 },
+			vk::DescriptorPoolSize{ vk::DescriptorType::eUniformBuffer, 1000 },
+			vk::DescriptorPoolSize{ vk::DescriptorType::eStorageBuffer, 1000 },
+			vk::DescriptorPoolSize{ vk::DescriptorType::eUniformBufferDynamic, 1000 },
+			vk::DescriptorPoolSize{ vk::DescriptorType::eStorageBufferDynamic, 1000 },
+			vk::DescriptorPoolSize{ vk::DescriptorType::eInputAttachment, 1000 }
+		};
+
+		vk::DescriptorPoolCreateInfo poolInfo{
+			vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
+			1000 * 11,
+			poolSizes
+		};
+		m_ImGuiDescriptorPool = vk::raii::DescriptorPool{ m_Context.GetDevice(), poolInfo };
 	}
 
 	void Renderer::recordCommandBuffer(uint32_t imageIndex)
@@ -332,6 +398,8 @@ namespace Lithen {
 
 			obj.GetModel()->Draw(commandBuffer);
 		}
+
+		ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), *commandBuffer);
 
 		commandBuffer.endRendering();
 

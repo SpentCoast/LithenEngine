@@ -30,20 +30,13 @@ namespace Lithen {
 		}
 	}
 
-	void DescriptorManager::UpdateUBO(uint32_t currentFrame, size_t objectIndex, const glm::mat4& modelMatrix, const vk::Extent2D& extent)
+	void DescriptorManager::UpdateUBO(uint32_t currentFrame, size_t objectIndex, const glm::mat4& modelMatrix, const Camera& camera)
 	{
-		static auto startTime = std::chrono::high_resolution_clock::now();
-		auto currentTime = std::chrono::high_resolution_clock::now();
-		float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-
 		UniformBufferObject ubo{};
+
 		ubo.Model = modelMatrix;
-		ubo.View = glm::lookAt(glm::vec3(4.0f, 4.0f, 2.0f), glm::vec3(0.0f, 0.0f, -0.5f), glm::vec3(0.0f, 0.0f, 1.0f));
-		ubo.Projection = glm::perspective(
-			glm::radians(45.0f),
-			static_cast<float>(extent.width) / static_cast<float>(extent.height),
-			0.1f, 10.0f);
-		ubo.Projection[1][1] *= -1;
+		ubo.View = camera.GetViewMatrix();
+		ubo.Projection = camera.GetProjectionMatrix();
 
 		memcpy(m_ObjectResources[objectIndex].UniformBuffersMapped[currentFrame], &ubo, sizeof(ubo));
 	}

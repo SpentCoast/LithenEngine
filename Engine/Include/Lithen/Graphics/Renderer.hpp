@@ -2,6 +2,7 @@
 #include "LithenPCH.hpp"
 
 #include "Core/GameObject.hpp"
+
 #include "Graphics/VulkanContext.hpp"
 #include "Graphics/Swapchain.hpp"
 #include "Graphics/Buffer.hpp"
@@ -9,6 +10,7 @@
 #include "Graphics/GraphicsPipeline.hpp"
 #include "Graphics/DescriptorManager.hpp"
 #include "Graphics/Model.hpp"
+#include "Graphics/Camera.hpp"
 
 namespace Lithen {
 
@@ -24,7 +26,9 @@ namespace Lithen {
 		Renderer(Window& window, const VKContext& vkContext);
 		~Renderer();
 
-		void DrawFrame();
+		void DrawFrame(const Camera& camera);
+
+		std::vector<GameObject>& GetGameObjects() { return m_GameObjects; }
 
 	private:
 		void createGraphicsPipeline();
@@ -32,12 +36,15 @@ namespace Lithen {
 		void createDepthResources();
 		void createCommandBuffers();
 		void createSyncObjects();
+		void initImGui();
 
 		void recreateSwapchain();
 
 		std::pair<vk::raii::Image, vk::raii::DeviceMemory> createImage(
 			uint32_t width, uint32_t height,
 			vk::Format format, vk::ImageTiling tiling, vk::ImageUsageFlags usage, vk::MemoryPropertyFlags properties);
+
+		void createImGuiPool();
 
 		void recordCommandBuffer(uint32_t imageIndex);
 		void transitionImageLayout(
@@ -59,6 +66,8 @@ namespace Lithen {
 
 		std::unique_ptr<GraphicsPipeline> m_GraphicsPipeline;
 		std::unique_ptr<DescriptorManager> m_DescriptorManager;
+
+		vk::raii::DescriptorPool m_ImGuiDescriptorPool = nullptr;
 
 		vk::raii::CommandPool m_CommandPool = nullptr;
 		std::vector<vk::raii::CommandBuffer> m_CommandBuffers;

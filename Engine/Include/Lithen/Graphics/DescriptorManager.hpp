@@ -2,9 +2,11 @@
 #include "LithenPCH.hpp"
 
 #include "Core/GameObject.hpp"
+
 #include "Graphics/VulkanContext.hpp"
 #include "Graphics/Buffer.hpp"
 #include "Graphics/Texture.hpp"
+#include "Graphics/Camera.hpp"
 
 namespace Lithen {
 
@@ -25,7 +27,7 @@ namespace Lithen {
 		DescriptorManager(const VKContext& context, uint32_t maxFramesInFlight, size_t maxObjects);
 		~DescriptorManager() = default;
 
-		void UpdateUBO(uint32_t currentFrame, size_t objectIndex, const glm::mat4& modelMatrix, const vk::Extent2D& extent);
+		void UpdateUBO(uint32_t currentFrame, size_t objectIndex, const glm::mat4& modelMatrix, const Camera& camera);
 		
 		void CreateObjectDescriptorSets(const std::vector<GameObject>& gameObjects, const std::vector<std::shared_ptr<Texture>>& textures);
 
